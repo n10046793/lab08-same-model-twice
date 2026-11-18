@@ -3,7 +3,7 @@
 The Keras network must match the PyTorch network: same shape, same
 parameter count, same predictions once the weights are copied, and
 the same rows. The weight-copy tolerance is 1e-4, far above the
-3e-08 difference seen when the copy is done right.
+3.7e-08 difference measured on the validation rows.
 """
 
 import keras
@@ -35,20 +35,18 @@ def test_parameter_count_matches_pytorch(hidden):
 
 
 def test_weight_copy_gives_same_predictions():
-    # Every row and column has distinct values, so using a weight
-    # the wrong way round changes the answer. This matters most for
+    # Validation rows have distinct values, so using a weight the
+    # wrong way round changes the answer. This matters most for
     # the middle layer, whose weight is square and would fit either
     # way round without raising an error.
-    rng = np.random.default_rng(7)
-    rows = rng.normal(size=(24, 8)).astype(np.float32)
+    splits = make_splits(SEED)
+    rows = splits.val.x.numpy()[:24]
     torch.manual_seed(11)
     torch_model = BikeNet(8)
     keras_model = build_model(8)
     copy_weights(torch_model, keras_model)
     torch_model.eval()
-    torch_predictions = (
-        torch_model(torch.from_numpy(rows)).detach().numpy()
-    )
+    torch_predictions = torch_model(torch.from_numpy(rows)).detach().numpy()
     keras_predictions = keras_model.predict(rows, verbose=0).flatten()
     np.testing.assert_allclose(
         keras_predictions, torch_predictions, atol=TOLERANCE
