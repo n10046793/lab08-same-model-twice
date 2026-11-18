@@ -4,22 +4,28 @@
 
 This project predicts how many bikes will be rented from a station in the coming hour, using the hour, the weather, whether it is a weekend, and the type of station. It trains a small neural network with a training loop written by hand, and it compares that network honestly with two simple baselines. All results are reproduced with one command, `python train.py`.
 
+Lab 08 rebuilds the same network in Keras, proves the two networks are the same function by copying the weights across, trains both fairly, and compares them on three seeds. The Keras run is `python train_keras.py`, and the comparison is `python compare.py`. The write-up, with the recommendation for the scenario team, is in `COMPARISON.md`.
+
 ## How to run it
 
 Create the environment and install the packages, then run the training script. Use the terminal in VS Code, not the play button, so the commands run in the right environment.
 
 ```bash
-conda create -n lab07-first-principles python=3.12
-conda activate lab07-first-principles
+conda create -n lab08-same-model-twice python=3.12
+conda activate lab08-same-model-twice
 pip install -r requirements-dev.txt
 python train.py
+python train_keras.py
+python compare.py
 ```
 
-That command trains the main network, runs the two baselines and the three experiments, and writes every result to `reports/`.
+That trains the PyTorch network, the Keras network, and the three-seed comparison, and writes every result to `reports/`.
+
+`requirements.txt` pins `ml-dtypes` to 0.5.3, because version 0.7.0 would not load on the laptop used for this lab: Windows Application Control blocked its extension file. The pin is in the requirements file so a fresh install gets the working version.
 
 ### Run
 
-`python train.py` is the only command needed to reproduce the results. It takes about two minutes on a CPU. It prints one line per epoch, then the best epoch and the baseline numbers.
+`python train.py` trains the PyTorch network, runs the two baselines and the three experiments, and takes about two minutes on a CPU. `python train_keras.py` trains the Keras version and takes about a minute. `python compare.py` trains the main configuration in both frameworks on three seeds and takes a few minutes. Each script prints its progress and its best epoch and MAE numbers.
 
 ### Check it
 
@@ -31,15 +37,19 @@ python -m ruff check
 python -m pytest
 ```
 
-Then run `python train.py` and check that it recreates the files in `reports/` with the numbers in this README.
+Then run `python train.py`, `python train_keras.py` and `python compare.py`, and check that they recreate the files in `reports/` with the numbers in this README and in `COMPARISON.md`.
 
 ### Settings
 
 The main run uses 80 epochs, batch size 64, Adam with learning rate 0.003, hidden size 32, and seed 42. The split is 60/20/20 with seed 42. These settings are at the top of `train.py` and in `prepare.py`, and they are listed in the Model and training section below.
 
+The Keras run uses the same settings: the same split and the same prepared arrays from `prepare.py`, the same loss, optimizer, learning rate, batch size and seed. `keras.utils.set_random_seed` is called before the model is built. EarlyStopping watches the validation loss with patience equal to the number of epochs, so the run never stops early, and it restores the best weights. A ModelCheckpoint saves the best model to `reports/best_keras_model.keras`, which is not committed; rerun `python train_keras.py` to recreate it.
+
 ### Errors and exit codes
 
 There are no custom exit codes in this project. Python and pytest use their normal exit codes: 0 means success, and a non-zero code means an error. The most common errors are a missing environment, which gives `ModuleNotFoundError: No module named 'torch'`, and a shape mismatch, which names the two shapes that do not agree. If `python train.py` fails, read the last error message first, it usually names the file and the line.
+
+On this laptop, TensorFlow failed at first with an `ImportError` for `ml_dtypes`, because Windows Application Control blocked its extension file. The fix was `ml-dtypes==0.5.3`, pinned in `requirements.txt`. TensorFlow also prints startup warnings about oneDNN and GPU support on Windows; those are normal and do not affect the results.
 
 ## Data and split
 
@@ -59,6 +69,14 @@ The training loop is written by hand in `train.py`. One epoch takes a batch, run
 
 The seed is fixed in `train.py`: PyTorch and the DataLoader generator both use seed 42, and the split uses seed 42. Running `python train.py` twice on the same computer gives identical numbers, which was checked by running it twice and comparing the report files.
 
+## Keras version
+
+`keras_model.py` builds the same network with `keras.Sequential`: an `Input` layer, two `Dense` layers of 32 units with ReLU, and a final `Dense` layer with one value and no activation. The hidden size is configurable. The parameter count equals the PyTorch network's at every hidden size tested: 433, 1,377 and 4,801 for hidden sizes 16, 32 and 64.
+
+`copy_weights` in the same file copies the weights from a PyTorch `BikeNet` into the Keras model. A PyTorch weight has shape (outputs, inputs) and a Keras Dense kernel has shape (inputs, outputs), so each weight is transposed and the biases copy straight across. After the copy, the largest prediction difference on the 1,200 validation rows was 3.73e-08, which is floating point rounding, so the two networks are the same function with the same weights. The test in `tests/test_keras.py` checks this within a stated tolerance of 1e-4.
+
+`train_keras.py` compiles the model with Adam at learning rate 0.003, mean squared error loss and MAE as a metric, then fits it with the EarlyStopping and ModelCheckpoint callbacks described in Settings. It writes `history_keras.csv` and `learning_curves_keras.png` beside the PyTorch reports. The checkpoint file itself is not committed; `.gitignore` excludes it, and rerunning the script recreates it.
+
 ## Results
 
 | Model | Validation MAE (rentals) | Test MAE (rentals) |
@@ -74,6 +92,25 @@ The linear model does not do well on this table because rentals do not change in
 ![Learning curves](reports/learning_curves.png)
 
 The curves show a healthy run. Both the training loss and the validation loss fall steeply for the first 35 epochs, from about 250 to about 25, then flatten and fall slowly together, with the training loss just below the validation loss. The gap between them stays small, so the network is not strongly overfitting. The best epoch is 78, marked with a dashed line, which is near the end of training, so a few more epochs might help a little, but the validation loss is noisy late in training, with a jump at epoch 79, so the best-epoch weights are the ones to keep.
+
+The Keras version of the main run, on seed 42, reached best epoch 80, validation MAE 3.05 and test MAE 2.88.
+
+![Learning curves (Keras)](reports/learning_curves_keras.png)
+
+## Comparison summary
+
+`compare.py` trains the main configuration in both frameworks on three seeds, using the same split for both frameworks on each seed. The full table is in `reports/comparison.csv`.
+
+| Framework | Seed | Best epoch | Validation MAE | Test MAE | Seconds |
+| --- | --- | --- | --- | --- | --- |
+| PyTorch | 42 | 78 | 2.74 | 2.61 | 5.3 |
+| Keras | 42 | 80 | 3.05 | 2.88 | 9.7 |
+| PyTorch | 123 | 80 | 2.61 | 2.68 | 5.8 |
+| Keras | 123 | 80 | 2.82 | 2.87 | 8.1 |
+| PyTorch | 2026 | 79 | 3.04 | 2.96 | 5.7 |
+| Keras | 2026 | 80 | 3.20 | 3.10 | 7.5 |
+
+PyTorch scored better on test MAE and trained faster on all three seeds. The recommendation, what the team gives up, and the condition that would change it are in `COMPARISON.md`.
 
 ## Experiments
 
@@ -98,12 +135,16 @@ The data are invented, not real bike share records, so the model describes this 
 
 ## Reproducing a run
 
-Delete the `reports/` folder, run `python train.py` again, and compare the new files with the committed ones. On the same computer the numbers are identical. On another computer they may differ in the last digits, because the PyTorch version and the hardware can change the last digits, even with the same seed.
+Delete the `reports/` folder, run `python train.py`, `python train_keras.py` and `python compare.py` again, and compare the new files with the committed ones. On the same computer the numbers are identical. On another computer they may differ in the last digits, because the framework versions and the hardware can change the last digits, even with the same seed.
 
 ## What the tests cover
 
-There are 12 tests in `tests/`, run with `python -m pytest`. They cover the 9 items in the Lab 07 PDF: the Dataset length, shapes and dtypes; the split sizes and no overlap between splits; the scaler fitted on the training rows only; the training loader shuffling repeatably with a seed; the network returning one value per row for hidden sizes 4, 16, 32 and 64, using `pytest.mark.parametrize`; one optimizer step changing every layer; the network memorizing one small batch; a validation epoch leaving the weights unchanged; and the training function returning one history row per epoch and restoring the best weights. The memorize test is the one that would fail if the gradients were never cleared or the optimizer step were missing, because the loss on one small batch would not fall to less than a fifth of where it started.
+There are 23 tests in `tests/`, run with `python -m pytest`: the 12 Lab 07 tests, plus 11 Keras checks from 8 new test functions in `tests/test_keras.py`, one of them parametrized. The Lab 07 tests cover the 9 items in the Lab 07 PDF: the Dataset length, shapes and dtypes; the split sizes and no overlap between splits; the scaler fitted on the training rows only; the training loader shuffling repeatably with a seed; the network returning one value per row for hidden sizes 4, 16, 32 and 64, using `pytest.mark.parametrize`; one optimizer step changing every layer; the network memorizing one small batch; a validation epoch leaving the weights unchanged; and the training function returning one history row per epoch and restoring the best weights. The memorize test is the one that would fail if the gradients were never cleared or the optimizer step were missing, because the loss on one small batch would not fall to less than a fifth of where it started.
+
+The Keras tests cover the Keras network returning one value per row; the parameter count matching PyTorch for hidden sizes 8, 16, 32 and 64, using `pytest.mark.parametrize`; the weight copy giving the same predictions on validation rows within 1e-4, with inputs chosen so the test would fail if the copy forgot the transpose; both frameworks using the same rows; the Keras network memorizing one small batch; a saved and reloaded Keras model giving the same predictions; the best weights being restored; and the same seed repeating a short run.
 
 ## Known limitations
 
 The main run was chosen using the validation rows, and the best epoch was 78 of 80, so the network was still improving slowly at the end of training. The validation loss is noisy late in training. The wider network is slightly better on validation, but it was not chosen as the main run because the gain is small for the extra size. The linear baseline uses the same prepared features as the network, and the mean baseline uses the training mean only. No dropout or weight decay was used, and no early stopping rule was used other than restoring the best epoch.
+
+The Keras runs reached their best epoch at 80 on all three seeds, so Keras was still improving when training stopped. The comparison covers three seeds only, on one invented table. The ModelCheckpoint file is not committed, and `ml-dtypes` is pinned to 0.5.3 because version 0.7.0 would not load on the laptop used for this lab.

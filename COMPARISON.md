@@ -1,0 +1,11 @@
+# The same model, twice: PyTorch vs Keras
+
+Both networks are the same function. After copying the PyTorch weights into the Keras network, transposing each weight, the largest prediction difference on the 1,200 validation rows was 3.73e-08, which is floating point rounding. The parameter counts also match at every hidden size tested: 433, 1,377 and 4,801. The differences below are therefore about training and working with the frameworks, not about the model itself.
+
+First, PyTorch scored better on every seed. In reports/comparison.csv, PyTorch test MAE was 2.61, 2.68 and 2.96 across seeds 42, 123 and 2026, against Keras at 2.88, 2.87 and 3.10. The mean gap is 0.20 rentals. The seeds make each framework repeatable, not identical: Keras starts from Glorot uniform weights with zero biases, PyTorch uses its own starting scheme, and the batch orders differ, so the two runs land in different places even with the same seed.
+
+Second, PyTorch trained faster: 5.3, 5.8 and 5.7 seconds, against 9.7, 8.1 and 7.5 seconds for Keras. The gap is small in absolute terms on a job this size, but it was consistent across all three seeds.
+
+Third, Keras needed less code to train but hid more. The Keras run is compile, fit and two callbacks, while PyTorch needs the hand-written loop in train.py and restores the best weights by hand. The price of the Keras shortcut showed up in setup: TensorFlow's ml-dtypes 0.7.0 would not load on this laptop because Windows Application Control blocked its extension file, and the fix was pinning ml-dtypes to 0.5.3 in requirements.txt. PyTorch installed and ran with no such problem.
+
+I recommend PyTorch for the weekly job. It won on accuracy and speed in this comparison, and the possible Hugging Face pretrained models later in the year point the same way, since that ecosystem is built around PyTorch first. What the team gives up is the shorter Keras code and the Keras teammate's existing knowledge: that teammate will need to learn the PyTorch loop, and the team will maintain more training code. One condition would change this recommendation: if the pretrained models the team adopts turn out to be available only in TensorFlow, or the job moves to TensorFlow-only serving, Keras becomes the better choice and the team should switch.
