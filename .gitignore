@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+reports/best_keras_model.keras
