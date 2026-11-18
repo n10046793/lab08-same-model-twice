@@ -48,9 +48,7 @@ def test_weight_copy_gives_same_predictions():
     torch_model.eval()
     torch_predictions = torch_model(torch.from_numpy(rows)).detach().numpy()
     keras_predictions = keras_model.predict(rows, verbose=0).flatten()
-    np.testing.assert_allclose(
-        keras_predictions, torch_predictions, atol=TOLERANCE
-    )
+    np.testing.assert_allclose(keras_predictions, torch_predictions, atol=TOLERANCE)
 
 
 def test_both_frameworks_use_the_same_rows():
@@ -115,9 +113,7 @@ def test_best_weights_are_restored():
         verbose=0,
     )
     # The restored model must score the best epoch's validation loss.
-    val_loss, _ = model.evaluate(
-        splits.val.x.numpy(), splits.val.y.numpy(), verbose=0
-    )
+    val_loss, _ = model.evaluate(splits.val.x.numpy(), splits.val.y.numpy(), verbose=0)
     best_loss = min(history.history["val_loss"])
     assert abs(val_loss - best_loss) < 1e-3
 

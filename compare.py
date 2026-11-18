@@ -92,8 +92,10 @@ def main():
     rows = []
     for seed in SEEDS:
         splits = make_splits(seed)
-        print(f"\nSeed {seed}: train {len(splits.train)} "
-              f"val {len(splits.val)} test {len(splits.test)}")
+        print(
+            f"\nSeed {seed}: train {len(splits.train)} "
+            f"val {len(splits.val)} test {len(splits.test)}"
+        )
         best_epoch, val_mae, test_mae, seconds = train_torch(splits, seed)
         rows.append(
             {
